@@ -1,63 +1,50 @@
 using System;
+using System.IO;
 using System.Text;
 
 namespace UltimateUnscrubber
 {
-    public class JunkStream
+    class Junk : Stream
     {
-        public long Position;
-        bool hashed;
+        public override long Position { get { return position; } set { position = value; } }
+        long position;
+        public override long Length { get { return length; } }
+        long length;
         byte[] id;
+        int disc;
         byte[] junk = new byte[0x40000];
         int current_junk_index = -1;
-        uint[] numArray = new uint[0x824];
-        long end_offset;
-        int disc;
 
-        public JunkStream(string ID, int disc, bool hashed, long end_offset)
+        public Junk(string ID, int disc, long length)
         {
-            this.hashed = hashed;
-            this.end_offset = end_offset;
-            this.disc = disc;
             id = Encoding.ASCII.GetBytes(ID);
+            this.disc = disc;
+            this.length = length;
         }
 
-        public void Read(byte[] data, int offset, int size)
+        public override int Read(byte[] buffer, int offset, int size)
         {
             while (size > 0)
             {
-                var writing_hash = hashed && Position % 0x8000 < 0x400;
-                var to_write = (writing_hash ? 0x400 : 0x8000) - (int)(Position % 0x8000);
-                to_write = Math.Min(to_write, size);
-                if (writing_hash) Array.Clear(data, offset, to_write);
-                else
+                var junk_index = (int)(position / junk.Length);
+                if (current_junk_index != junk_index)
                 {
-                    var unhashed_offset = Unhash(Position);
-                    var junk_index = (int)(unhashed_offset / 0x40000);
-                    var junk_offset = (int)(unhashed_offset % 0x40000);
-                    if (current_junk_index != junk_index)
-                    {
-                        current_junk_index = junk_index;
-                        GetJunkBlock((uint)current_junk_index, id, (byte)disc, junk);
-                        var junk_end_offset = (int)Math.Min(Unhash(end_offset) / 0x8000 * 0x8000 - (unhashed_offset-junk_offset), 0x40000);
-                        junk_end_offset = Math.Max(junk_end_offset, 0);
-                        Array.Clear(junk, junk_end_offset, 0x40000 - junk_end_offset);
-                    }
-                    to_write = Math.Min(to_write, 0x40000 - junk_offset);
-                    Array.Copy(junk, junk_offset, data, offset, to_write);
+                    current_junk_index = junk_index;
+                    GetJunkBlock((uint)current_junk_index, id, (byte)disc, junk);
+                    var junk_size = (int)Math2.Clamp(0, Math2.Align(length, 0x8000) - (long)junk_index * junk.Length, junk.Length);
+                    Array.Clear(junk, junk_size, junk.Length - junk_size);
                 }
-                offset += to_write;
-                size -= to_write;
-                Position += to_write;
+                var junk_offset = (int)(position % junk.Length);
+                var junk_copy_size = Math.Min(size, junk.Length - junk_offset);
+                Array.Copy(junk, junk_offset, buffer, offset, junk_copy_size);
+                offset += junk_copy_size;
+                size -= junk_copy_size;
+                position += junk_copy_size;
             }
+            return size;
         }
 
-        long Unhash(long offset)
-        {
-            if (hashed) return offset / 0x8000 * 0x7c00 + Math.Max(offset % 0x8000 - 0x400, 0);
-            else return offset;
-        }
-
+        uint[] numArray = new uint[0x824];
         void GetJunkBlock(uint block, byte[] ID, byte disc, byte[] buffer)
         {
             Array.Clear(numArray, 0, numArray.Length);
@@ -123,5 +110,22 @@ namespace UltimateUnscrubber
                 index++;
             }
         }
+
+        public override bool CanRead { get { return true; } }
+        public override bool CanSeek { get { return true; } }
+        public override bool CanWrite { get { return false; } }
+        public override void Flush() { throw new NotImplementedException(); }
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            switch (origin)
+            {
+                case SeekOrigin.Begin: Position = offset; break;
+                case SeekOrigin.Current: Position += offset; break;
+                case SeekOrigin.End: Position = Length - offset; break;
+            }
+            return Position;
+        }
+        public override void SetLength(long value) { throw new NotImplementedException(); }
+        public override void Write(byte[] buffer, int offset, int count) { throw new NotImplementedException(); }
     }
 }
