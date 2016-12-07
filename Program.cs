@@ -18,17 +18,23 @@ namespace UltimateUnscrubber
             public byte[] sha1;
         }
 
+        // Main executable directory.
+        private static string exe_dir;
+        // Additional files directory.
+        private static string additional_dir;
+        // Update partitions directory.
+        private static string update_partitions_dir;
+
         static void Main(string[] args)
         {
-            string exe_dir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-            string additional_dir = "UltimateUnscrubber_files";
-            Environment.CurrentDirectory = exe_dir;
+            exe_dir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+            additional_dir = Path.Combine(exe_dir, "UltimateUnscrubber_files");
             if (!Directory.Exists(additional_dir)) Directory.CreateDirectory(additional_dir);
-            Environment.CurrentDirectory = Path.Combine(exe_dir, additional_dir);
-            if (!Directory.Exists("update_partitions")) Directory.CreateDirectory("update_partitions");
+            update_partitions_dir = Path.Combine(additional_dir, "update_partitions");
+            if (!Directory.Exists(update_partitions_dir)) Directory.CreateDirectory(update_partitions_dir);
 
             Console.WriteLine("Wii Ultimate Unscrubber v0.4 beta\n");
-            ConvertPartitionFiles(Directory.GetFiles("update_partitions", "*", SearchOption.AllDirectories));
+            ConvertPartitionFiles(Directory.GetFiles(update_partitions_dir, "*", SearchOption.AllDirectories));
             string iso_path;
             JobType job;
             switch (args.Length)
@@ -77,7 +83,7 @@ namespace UltimateUnscrubber
                 {
                     var source_path = iso_files[i];
                     Console.WriteLine(source_path);
-                    var dest_folder = @"update_partitions";
+                    string dest_folder = update_partitions_dir;
                     try
                     {
                         using (var source = OpenFile(source_path))
@@ -114,7 +120,7 @@ namespace UltimateUnscrubber
             else
             {
                 var redump = new List<RedumpRecord>();
-                foreach (var dat_file in Directory.GetFiles(@".", "*.dat", SearchOption.TopDirectoryOnly))
+                foreach (var dat_file in Directory.GetFiles(exe_dir, "*.dat", SearchOption.TopDirectoryOnly))
                 {
                     Console.WriteLine("\nUsing checksums from file " + Path.GetFileName(dat_file));
                     var count = 0;
@@ -167,14 +173,14 @@ namespace UltimateUnscrubber
                     var found = false;
                     try
                     {
-                        var new_target = Path.GetDirectoryName(source_file_path) + "/" + Path.GetFileNameWithoutExtension(source_file_path) + ".iso";
-                        var target_path = new_target + ".new";
+                        string new_target = Path.Combine(Path.GetDirectoryName(source_file_path), Path.GetFileNameWithoutExtension(source_file_path) + ".iso");
+                        string target_path = new_target + ".new";
                         using (var source = OpenFile(iso_path))
                         {
                             //using (var f = File.Create(target_path)) source.Copy(0, f, source.Length, 5);
                             has_update_partition = source.ReadBE32(0x40024) == 1;
                             var original_header = source.Read(0, 0x50000);
-                            var update_partitions = (IEnumerable<string>)Directory.GetFiles("update_partitions", "*");
+                            var update_partitions = (IEnumerable<string>)Directory.GetFiles(update_partitions_dir, "*");
                             if (source.ReadBE32(0x40024) == 1) update_partitions = new[] { source_file_path }.Union(update_partitions);
                             else
                             {
@@ -297,7 +303,7 @@ namespace UltimateUnscrubber
                             if (File.Exists(old_file_path)) File.Delete(old_file_path);
                             File.Move(source_file_path, old_file_path);
 
-                            if (!found) new_target = Path.GetDirectoryName(new_target) + "/" + Path.GetFileNameWithoutExtension(new_target) + " (unverified)" + Path.GetExtension(new_target);
+                            if (!found) new_target = Path.Combine(Path.GetDirectoryName(new_target), Path.GetFileNameWithoutExtension(new_target) + " (unverified)" + Path.GetExtension(new_target));
                             Console.WriteLine(Path.GetFileName(target_path) + " -> " + Path.GetFileName(new_target));
                             File.Move(target_path, new_target);
                         }
@@ -319,7 +325,7 @@ namespace UltimateUnscrubber
             for (var i = 0; i < update_partitions.Length;i++)
             {
                 var uf = update_partitions[i];
-                var dest_folder = "update_partitions";
+                string dest_folder = update_partitions_dir;
                 if (Regex.IsMatch(uf, @"\w{40}_\w_\w{8}")) continue;
                 Console.WriteLine("Converting UPDATE partition file " + uf + " to new naming");
                 try
