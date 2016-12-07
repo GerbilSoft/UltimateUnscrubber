@@ -67,14 +67,35 @@ namespace UltimateUnscrubber
             var tmd_offset = header_stream.ReadBE32(header_offset + 0x2a8) * 4;
             content_sha1 = header_stream.Read(header_offset + tmd_offset + 0x1e4 + 0x10, 20);
 
-            var key = header_stream.Read(header_offset + 0x1bf, 16);
-            korean = header_stream.Read8(header_offset + 0x1f1) == 1;
-            aes.Key = korean ? BigNumber.ParseHex("63b82bb4f4614e2e13f2fefbba4c9b7e") : BigNumber.ParseHex("ebe42a225e8593e448d9c5457381aaf7");
-            var iv = header_stream.Read(header_offset + 0x1dc, 16);
+            // Determine the common key to use.
+            string issuer = System.Text.Encoding.ASCII.GetString(header_stream.Read(header_offset + 0x140, 64)).TrimEnd('\0');
+            if (issuer == "Root-CA00000002-XS00000006")
+            {
+                // Debug signature. Use the RVT-R key.
+                aes.Key = new byte[] { 0xa1,0x60,0x4a,0x6a,0x71,0x23,0xb5,0x29,0xae,0x8b,0xec,0x32,0xc8,0x16,0xfc,0xaa };
+                korean = false;
+            }
+            else
+            {
+                // Assuming this is a retail signature.
+                korean = (header_stream.Read8(header_offset + 0x1f1) == 1);
+                if (korean)
+                {
+                    aes.Key = new byte[] { 0x63,0xb8,0x2b,0xb4,0xf4,0x61,0x4e,0x2e,0x13,0xf2,0xfe,0xfb,0xba,0x4c,0x9b,0x7e };
+                }
+                else
+                {
+                    aes.Key = new byte[] { 0xeb,0xe4,0x2a,0x22,0x5e,0x85,0x93,0xe4,0x48,0xd9,0xc5,0x45,0x73,0x81,0xaa,0xf7 };
+                }
+            }
+
+            // Decrypt the title key using the common key and the IV.
+            byte[] title_key = header_stream.Read(header_offset + 0x1bf, 16);
+            byte[] iv = header_stream.Read(header_offset + 0x1dc, 16);
             Array.Clear(iv, 8, 8);
             aes.IV = iv;
-            using (var cryptor = aes.CreateDecryptor()) cryptor.TransformBlock(key, 0, 16, key, 0);
-            aes.Key = key;
+            using (var cryptor = aes.CreateDecryptor()) cryptor.TransformBlock(title_key, 0, 16, title_key, 0);
+            aes.Key = title_key;
         }
         public override int Read(byte[] buffer, int offset, int size)
         {
