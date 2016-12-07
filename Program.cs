@@ -20,11 +20,13 @@ namespace UltimateUnscrubber
 
         static void Main(string[] args)
         {
-            var additional_dir = "UltimateUnscrubber_files";
-            Environment.CurrentDirectory = Path.GetDirectoryName(Environment.GetCommandLineArgs()[0]);
+            string exe_dir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+            string additional_dir = "UltimateUnscrubber_files";
+            Environment.CurrentDirectory = exe_dir;
             if (!Directory.Exists(additional_dir)) Directory.CreateDirectory(additional_dir);
-            Environment.CurrentDirectory = Path.Combine(Path.GetDirectoryName(Environment.GetCommandLineArgs()[0]), additional_dir);
+            Environment.CurrentDirectory = Path.Combine(exe_dir, additional_dir);
             if (!Directory.Exists("update_partitions")) Directory.CreateDirectory("update_partitions");
+
             Console.WriteLine("Wii Ultimate Unscrubber v0.4 beta\n");
             ConvertPartitionFiles(Directory.GetFiles("update_partitions", "*", SearchOption.AllDirectories));
             string iso_path;
